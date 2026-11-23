@@ -11,6 +11,23 @@ PSH_LAHORE = 4.93
 PR_DEFAULT = 0.78
 PANEL_WATT_DEFAULT = 585
 
+# City PSH (peak sun hours/day, annual average, flat ground).
+# Source: solarposition.org Pakistan page, NASA POWER climatology.
+# These are estimates, not site-measured values — shading, tilt,
+# dust and smog change the real yield by ±10-15%.
+# Lahore is kept at 4.93 to match the original verified example.
+CITY_PSH = {
+    "Lahore": 4.93,
+    "Karachi": 5.66,
+    "Islamabad": 4.96,
+    "Multan": 5.12,
+    "Peshawar": 5.12,
+    "Quetta": 6.02,
+    "Faisalabad": 4.85,
+    "Rawalpindi": 4.97,
+    "Gujranwala": 5.04,
+}
+
 
 def annual_generation_per_kwp(psh=PSH_LAHORE, pr=PR_DEFAULT):
     return psh * 365 * pr
@@ -41,6 +58,28 @@ def is_protected(monthly_units):
     return monthly_units <= 200
 
 
+def size_system_for_city(monthly_units, city, pr=PR_DEFAULT,
+                         panel_watt=PANEL_WATT_DEFAULT):
+    """Size a system for a named city. Raises ValueError for unknown city."""
+    if city not in CITY_PSH:
+        raise ValueError(f"Unknown city: {city}. Known cities: "
+                         + ", ".join(sorted(CITY_PSH)))
+    result = size_system(monthly_units, psh=CITY_PSH[city], pr=pr,
+                         panel_watt=panel_watt)
+    result["city"] = city
+    result["psh"] = CITY_PSH[city]
+    return result
+
+
+def city_comparison(monthly_units, pr=PR_DEFAULT,
+                    panel_watt=PANEL_WATT_DEFAULT):
+    """Size the same monthly load in every known city, sunniest first."""
+    results = [size_system_for_city(monthly_units, city, pr=pr,
+                                    panel_watt=panel_watt)
+               for city in CITY_PSH]
+    return sorted(results, key=lambda r: r["psh"], reverse=True)
+
+
 if __name__ == "__main__":
     result = size_system(600)
     print("Lahore 600 units/month:")
@@ -49,3 +88,9 @@ if __name__ == "__main__":
     print(f"  Annual generation: {result['annual_generation_kwh']} kWh/year")
     print(f"  Protected (<=200 units)? {is_protected(600)}")
     print(f"  Protected (200 units)? {is_protected(200)}")
+    print()
+    print("Same 600 units/month in every city (sunniest first):")
+    for r in city_comparison(600):
+        print(f"  {r['city']:<12} PSH {r['psh']:.2f}  "
+              f"{r['panels']} panels  {r['installed_kwp']} kWp  "
+              f"{r['annual_generation_kwh']} kWh/year")
